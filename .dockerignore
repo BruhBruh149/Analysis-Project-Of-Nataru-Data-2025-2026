@@ -1,0 +1,22 @@
+# Git & Version Control
+.git
+.gitignore
+
+# Python Bytecode & Environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# Environment Variables & Secrets
+.env
+
+# Cache & Temporary Files
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db

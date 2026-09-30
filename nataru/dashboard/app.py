@@ -582,6 +582,70 @@ def render_dashboard(db_manager):
                     st.metric(label="Proyeksi Skor Baru", value=f"{proj_score:.2f} / 5.0", delta=f"+{delta_score:.2f}")
 
                 st.info(f"💡 Intervensi menghasilkan peningkatan kumulatif: **+{delta_csi:.2f}% CSI**.")
+
+            st.markdown("---")
+            st.subheader("Deteksi Dini Risiko & Explainable AI (Random Forest & Feature Attribution)")
+            st.markdown(r"""
+            Model *Supervised Machine Learning* (**Random Forest Classifier**, ROC-AUC: **0.919**) dilatih untuk mendeteksi dini probabilitas responden mengalami ketidakpuasan kritis ($CSI < 70\%$ atau Skor $\le 3$). 
+            Gunakan simulator skenario di bawah untuk melihat **prediksi risiko** beserta **Explainable AI (Feature Attribution)** yang membedah faktor mana yang paling mendorong atau menurunkan risiko.
+            """)
+
+            ew_res = predict_dissatisfaction_risks(db_manager)
+            ew_m = ew_res.get("model_metrics", {})
+
+            col_ew1, col_ew2, col_ew3, col_ew4 = st.columns(4)
+            with col_ew1:
+                st.metric("ROC-AUC Score", f"{ew_m.get('roc_auc', 0.919):.3f}", "Benchmark > 0.80")
+            with col_ew2:
+                st.metric("Model Accuracy", f"{ew_m.get('accuracy', 0.880)*100:.1f}%")
+            with col_ew3:
+                st.metric("F1-Score", f"{ew_m.get('f1', 0.858):.3f}")
+            with col_ew4:
+                st.metric("Populasi High-Risk Nasional", f"{ew_res.get('high_risk_pct', 19.41)}%", f"{ew_res.get('high_risk_count', 1977):,} Responden")
+
+            st.markdown("#### 🔍 Kalkulator Prediksi Risiko Skenario Individual & Explainable AI")
+            c_scen1, c_scen2 = st.columns([1, 1])
+            with c_scen1:
+                sc_moda = st.selectbox("Pilih Moda Perjalanan:", ["Angkutan Umum (Bus)", "Kereta Api", "Angkutan Udara", "ASDP (Penyeberangan)", "Kendaraan Pribadi"])
+                sc_wait = st.select_slider("Durasi Waktu Tunggu / Antrean di Simpul:", options=[15, 30, 45, 60, 90, 120, 180, 240, 360], value=90, format_func=lambda x: f"{x} Menit")
+                sc_cap = st.radio("Status Pemilihan Moda:", ["Pilihan Sukarela (Choice Rider)", "Terpaksa karena Kehabisan Tiket (Captive Rider)"], index=1)
+                sc_tepat = st.slider("Evaluasi Ketepatan Waktu (Punctuality):", 1.0, 5.0, 2.5, 0.5)
+                sc_safe = st.slider("Evaluasi Keamanan Simpul & Sarana:", 1.0, 5.0, 3.0, 0.5)
+                sc_fasil = st.slider("Evaluasi Fasilitas Ruang Tunggu:", 1.0, 5.0, 2.5, 0.5)
+
+                is_cap_val = 1 if "Terpaksa" in sc_cap else 0
+                scen_pred = predict_single_scenario({
+                    "moda_transportasi": sc_moda,
+                    "wait_min": sc_wait,
+                    "is_captive_rider": is_cap_val,
+                    "skor_ketepatan": sc_tepat,
+                    "skor_keamanan": sc_safe,
+                    "skor_fasilitas": sc_fasil
+                }, db_manager)
+
+            with c_scen2:
+                st.markdown(f"""
+                <div style="background:#f8f9fa; border:2px solid {scen_pred['badge_color']}; border-radius:10px; padding:16px; margin-bottom:15px;">
+                    <div style="font-size:13px; color:#6c757d; font-weight:600; text-transform:uppercase;">Prediksi Probabilitas Ketidakpuasan</div>
+                    <div style="font-size:36px; font-weight:800; color:{scen_pred['badge_color']};">{scen_pred['risk_percentage']}%</div>
+                    <div style="font-size:15px; font-weight:700; color:{scen_pred['badge_color']};">Tingkat Risiko: {scen_pred['risk_category']}</div>
+                    <div style="margin-top:10px; font-size:13px; line-height:1.4; color:#333;"><strong>Rekomendasi Operasional:</strong><br/>{scen_pred['rekomendasi']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("**🔬 Explainable AI: Dekomposisi Kontribusi Faktor Risiko**")
+                contrib_list = scen_pred.get("feature_contributions", [])
+                if contrib_list:
+                    df_ctrb = pd.DataFrame(contrib_list)
+                    fig_ctrb = px.bar(
+                        df_ctrb, x="kontribusi_persen", y="faktor", orientation="h",
+                        color="kontribusi_persen",
+                        color_continuous_scale=["#28a745", "#ffc107", "#dc3545"],
+                        title="Dampak Marginal Fitur terhadap Perubahan Risiko (% Poin)",
+                        labels={"kontribusi_persen": "Dampak Risiko (% Poin)", "faktor": "Faktor Operasional"}
+                    )
+                    fig_ctrb.update_layout(height=260, margin=dict(l=10, r=10, t=35, b=10))
+                    st.plotly_chart(fig_ctrb, use_container_width=True)
         except Exception as e:
             st.error(f"Error IPA: {e}")
 

@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # Nataru Analytics Web Dashboard Service (Streamlit & Python 3.11)
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nataru-analytics-app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - DEFAULT_DB_ENGINE=SQLITE
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=natarupassword
+      - DB_NAME=database_nataru
+      - PARQUET_CACHE_DIR=data_cache
+    volumes:
+      - ./data_cache:/app/data_cache
+      - ./grafik_analisis_nataru:/app/grafik_analisis_nataru
+      - ./exported_analytics_csv:/app/exported_analytics_csv
+      - ./nataru_analytics.db:/app/nataru_analytics.db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # MySQL Database Service (Optional multi-engine backend)
+  # ----------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: nataru-mysql-db
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: natarupassword
+      MYSQL_DATABASE: database_nataru
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./Database_Nataru.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pnatarupassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+    driver: local

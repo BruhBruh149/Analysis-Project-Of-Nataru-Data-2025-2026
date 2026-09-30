@@ -298,6 +298,44 @@ def predict_single_scenario(
 
         df_input = pd.DataFrame([row])[feature_cols]
         proba = float(model.predict_proba(df_input)[0, 1]) * 100.0
+
+        # Explainable AI: Feature Attribution / Contribution Breakdown terhadap baseline netral
+        base_features = {
+            "wait_min": 45.0,
+            "is_captive_rider": 0,
+            "jumlah_anggota_rombongan": 1,
+            "skor_fasilitas": 4.5,
+            "skor_ketepatan": 4.5,
+            "skor_kenyamanan": 4.5,
+            "skor_keamanan": 4.5
+        }
+        df_base = pd.DataFrame([{col: base_features.get(col, 0.0) for col in feature_cols}])[feature_cols]
+        base_proba = float(model.predict_proba(df_base)[0, 1]) * 100.0
+
+        label_map = {
+            "wait_min": "Durasi Waktu Tunggu",
+            "is_captive_rider": "Status Pengguna Terpaksa (Captive)",
+            "skor_ketepatan": "Ketepatan Waktu (Punctuality)",
+            "skor_keamanan": "Keamanan Simpul & Armada",
+            "skor_fasilitas": "Kualitas Fasilitas Simpul",
+            "skor_kenyamanan": "Kenyamanan Kabin/Armada",
+            "jumlah_anggota_rombongan": "Jumlah Anggota Rombongan"
+        }
+
+        contributions = []
+        for key in ["wait_min", "is_captive_rider", "skor_ketepatan", "skor_keamanan", "skor_fasilitas", "skor_kenyamanan"]:
+            if key in feature_cols:
+                df_pert = df_base.copy()
+                df_pert[key] = row[key]
+                p_pert = float(model.predict_proba(df_pert)[0, 1]) * 100.0
+                diff = round(p_pert - base_proba, 2)
+                contributions.append({
+                    "faktor": label_map.get(key, key),
+                    "nilai": row[key],
+                    "kontribusi_persen": diff,
+                    "arah_dampak": "Meningkatkan Risiko (+)" if diff > 0 else "Menurunkan Risiko (-)"
+                })
+        contributions.sort(key=lambda x: abs(x["kontribusi_persen"]), reverse=True)
     else:
         # Heuristic fallback
         w_wait = 25.0 if input_features.get("wait_min", 45) >= 120 else (12.0 if input_features.get("wait_min", 45) >= 60 else 0.0)
@@ -305,6 +343,14 @@ def predict_single_scenario(
         w_fas = 25.0 if input_features.get("skor_fasilitas", 4.0) <= 3.0 else 0.0
         w_tep = 20.0 if input_features.get("skor_ketepatan", 4.0) <= 3.0 else 0.0
         proba = float(np.clip(w_wait + w_cap + w_fas + w_tep + 5.0, 5.0, 95.0))
+        base_proba = 10.0
+        contributions = [
+            {"faktor": "Durasi Waktu Tunggu", "nilai": input_features.get("wait_min", 45), "kontribusi_persen": round(w_wait, 1), "arah_dampak": "Meningkatkan Risiko (+)" if w_wait > 0 else "Netral"},
+            {"faktor": "Status Pengguna Terpaksa (Captive)", "nilai": input_features.get("is_captive_rider", 0), "kontribusi_persen": round(w_cap, 1), "arah_dampak": "Meningkatkan Risiko (+)" if w_cap > 0 else "Netral"},
+            {"faktor": "Kualitas Fasilitas Simpul", "nilai": input_features.get("skor_fasilitas", 4.0), "kontribusi_persen": round(w_fas, 1), "arah_dampak": "Meningkatkan Risiko (+)" if w_fas > 0 else "Netral"},
+            {"faktor": "Ketepatan Waktu (Punctuality)", "nilai": input_features.get("skor_ketepatan", 4.0), "kontribusi_persen": round(w_tep, 1), "arah_dampak": "Meningkatkan Risiko (+)" if w_tep > 0 else "Netral"}
+        ]
+        contributions.sort(key=lambda x: abs(x["kontribusi_persen"]), reverse=True)
 
     proba_clean = round(proba, 1)
     if proba_clean >= 50.0:
@@ -322,8 +368,11 @@ def predict_single_scenario(
 
     return {
         "risk_percentage": proba_clean,
+        "base_risk_percentage": round(base_proba, 1),
         "risk_category": cat,
         "badge_color": color,
-        "rekomendasi": rec
+        "rekomendasi": rec,
+        "feature_contributions": contributions
     }
+
 

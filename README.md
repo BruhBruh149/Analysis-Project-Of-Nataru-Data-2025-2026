@@ -5,6 +5,8 @@
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Database](https://img.shields.io/badge/Database-MySQL%20%7C%20SQLite-4479A1.svg?logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
+[![CI Pipeline](https://github.com/BruhBruh149/PROJECT-ANALISIS-DATA-NATARU/actions/workflows/ci.yml/badge.svg)](https://github.com/BruhBruh149/PROJECT-ANALISIS-DATA-NATARU/actions)
 [![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Machine%20Learning-F7931E.svg?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/)
 [![Plotly](https://img.shields.io/badge/Plotly-Interactive%20Charts-3F4F75.svg?logo=plotly&logoColor=white)](https://plotly.com/)
 [![Apache Parquet](https://img.shields.io/badge/Storage-Apache%20Parquet-008080.svg?logo=apache&logoColor=white)](https://parquet.apache.org/)
@@ -146,12 +148,19 @@ PROJECT-ANALISIS-DATA-NATARU/
 - **Python 3.10+** installed.
 - *(Optional)* **XAMPP / MySQL** running on port 3306. If unavailable, the system defaults automatically to SQLite.
 
-### 2. Setup Environment
+### 2. Run with Docker Compose (Recommended - 1 Command)
 ```bash
 # Clone the repository
 git clone https://github.com/BruhBruh149/PROJECT-ANALISIS-DATA-NATARU.git
 cd PROJECT-ANALISIS-DATA-NATARU
 
+# Start application & MySQL services in background
+docker compose up --build
+```
+Access dashboard at `http://localhost:8501`.
+
+### 3. Manual Setup (Python Virtualenv)
+```bash
 # Create and activate virtual environment
 python -m venv venv
 # On Windows:
@@ -163,8 +172,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Environment Configuration *(Optional)*
-Copy `.env.example` to `.env` to override MySQL settings if desired:
+### 4. Environment Configuration *(Optional)*
+Copy `.env.example` to `.env` to customize settings:
 ```bash
 cp .env.example .env
 ```
