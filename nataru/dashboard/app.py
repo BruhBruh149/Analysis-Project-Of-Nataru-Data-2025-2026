@@ -90,7 +90,7 @@ def render_dashboard(db_manager):
     """, unsafe_allow_html=True)
 
     if not ok or df_kep.empty:
-        st.error("⚠️ Basis data analitik belum siap atau tabel fakta belum dimodelkan.")
+        st.error("Basis data analitik belum siap atau tabel fakta belum dimodelkan.")
         if st.button("Jalankan Pipeline ELT Otomatis Sekarang", type="primary"):
             with st.spinner("Memproses pipeline pembersihan data dan pemodelan basis data..."):
                 pipeline = NataruELTPipeline(db_manager)
@@ -102,7 +102,7 @@ def render_dashboard(db_manager):
 
     # Sidebar Filter & Kontrol
     with st.sidebar:
-        st.header("⚙️ Kontrol Sistem")
+        st.header("Kontrol Sistem")
         engine_options = ["MySQL XAMPP (Localhost:3306)", "SQLite Lokal (nataru_analytics.db)"]
         default_idx = 0 if db_manager.engine_type == "MYSQL" else 1
         selected_engine_label = st.selectbox("Database Engine:", engine_options, index=default_idx)

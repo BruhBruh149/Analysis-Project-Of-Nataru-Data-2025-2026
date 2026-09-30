@@ -3,6 +3,7 @@ Konfigurasi Global & Pengaturan Sistem Analitik Transportasi Nataru.
 Mendukung variabel lingkungan (.env) dengan fallback default lokal.
 """
 
+from matplotlib import use
 import os
 import subprocess
 from typing import Dict, Any, Optional
