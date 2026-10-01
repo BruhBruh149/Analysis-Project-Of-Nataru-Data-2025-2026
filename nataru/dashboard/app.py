@@ -11,7 +11,7 @@ from typing import Dict, Any
 import pandas as pd
 import numpy as np
 
-from ..config.settings import BASE_DIR, CHARTS_DIR
+from ..config.settings import BASE_DIR, CHARTS_DIR, REPORT_PATH
 from ..pipeline.text_cleaner import clean_hub_name
 from ..pipeline.elt_pipeline import NataruELTPipeline
 from ..analytics.kpi_engine import compute_kpi_summary, generate_terminal_report, export_all_tables_to_csv
@@ -52,15 +52,7 @@ def render_dashboard(db_manager):
 
     st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
 
-    # Otomatis pastikan file Laporan_Analisis_Nataru.txt terbuat / ter-update saat dashboard dibuka
-    if "report_auto_synced" not in st.session_state:
-        try:
-            generate_terminal_report(db_manager, export_file=True)
-            st.session_state["report_auto_synced"] = True
-        except Exception:
-            pass
-
-    @st.cache_data(ttl=120)
+    @st.cache_data(ttl=180)
     def load_data_from_db():
         try:
             df_k = db_manager.query("SELECT * FROM fakta_kepuasan_keseluruhan;")
@@ -74,6 +66,43 @@ def render_dashboard(db_manager):
         except Exception as err:
             logger.warning(f"Gagal load data: {err}")
             return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), False
+
+    # Fungsi Analitik & Model ML Ter-Cache untuk Akselerasi Respon Dashboard
+    @st.cache_data(ttl=300)
+    def cached_geo_hubs(_db):
+        return get_hub_performance_geo(_db)
+
+    @st.cache_data(ttl=300)
+    def cached_od_flow(_db, top_n=20):
+        return get_od_flow_data(_db, top_n=top_n)
+
+    @st.cache_data(ttl=300)
+    def cached_sankey(_db, level="provinsi", top_n=16):
+        return get_sankey_od_data(_db, level=level, top_n=top_n)
+
+    @st.cache_data(ttl=300)
+    def cached_risk_model(_db):
+        return predict_dissatisfaction_risks(_db)
+
+    @st.cache_data(ttl=300)
+    def cached_clustering(_db, n_clusters=3):
+        return run_passenger_clustering(_db, n_clusters=n_clusters)
+
+    @st.cache_data(ttl=300)
+    def cached_elbow(_db, max_k=5):
+        return compute_elbow_and_silhouette(_db, max_k=max_k)
+
+    @st.cache_data(ttl=300)
+    def cached_topics(s_masalah):
+        return extract_complaint_topics(s_masalah)
+
+    @st.cache_data(ttl=300)
+    def cached_bigram(s_masalah, n=2, top_n=12):
+        return extract_ngram_frequency(s_masalah, n=n, top_n=top_n)
+
+    @st.cache_data(ttl=300)
+    def cached_absa(s_masalah):
+        return analyze_aspect_based_sentiment(s_masalah)
 
     if "db_engine" not in st.session_state:
         st.session_state["db_engine"] = db_manager.engine_type
@@ -365,7 +394,7 @@ def render_dashboard(db_manager):
         st.markdown("Peta jalan nyata (*real street/terrain map*) sebaran simpul transportasi utama dengan status kepuasan (Hijau = Sangat Puas, Kuning = Cukup, Merah = Butuh Perbaikan):")
         
         try:
-            df_geo_hubs = get_hub_performance_geo(db_manager)
+            df_geo_hubs = cached_geo_hubs(db_manager)
             if not df_geo_hubs.empty:
                 f_gis_col1, f_gis_col2 = st.columns([1, 3])
                 with f_gis_col1:
@@ -464,7 +493,7 @@ def render_dashboard(db_manager):
         st.subheader("Pemetaan Geospasial Arus Mudik Asal-Tujuan (Origin-Destination Flow Map)")
         st.markdown("Peta interaktif koridor pergerakan arus mudik terpadat antar-wilayah di Indonesia:")
         try:
-            df_od = get_od_flow_data(db_manager, top_n=20)
+            df_od = cached_od_flow(db_manager, top_n=20)
             if not df_od.empty:
                 col_od_map, col_od_tbl = st.columns([3, 2])
                 with col_od_map:
@@ -490,7 +519,7 @@ def render_dashboard(db_manager):
             with sk_c1:
                 sankey_mode = st.radio("Pilih Granularitas Aliran:", ["Provinsi (Makro Regional)", "Kota / Kabupaten"], index=0, key="sankey_gran")
             level_arg = "provinsi" if "Provinsi" in sankey_mode else "kota"
-            sankey_data = get_sankey_od_data(db_manager, level=level_arg, top_n=16)
+            sankey_data = cached_sankey(db_manager, level=level_arg, top_n=16)
             if sankey_data and sankey_data.get("node_labels"):
                 fig_sankey = build_sankey_od_diagram(sankey_data, title=f"Diagram Aliran Arus Mudik Antar-{sankey_mode.split()[0]} Terpadat")
                 st.plotly_chart(fig_sankey, use_container_width=True)
@@ -589,7 +618,7 @@ def render_dashboard(db_manager):
             Gunakan simulator skenario di bawah untuk melihat **prediksi risiko** beserta **Explainable AI (Feature Attribution)** yang membedah faktor mana yang paling mendorong atau menurunkan risiko.
             """)
 
-            ew_res = predict_dissatisfaction_risks(db_manager)
+            ew_res = cached_risk_model(db_manager)
             ew_m = ew_res.get("model_metrics", {})
 
             col_ew1, col_ew2, col_ew3, col_ew4 = st.columns(4)
@@ -654,7 +683,7 @@ def render_dashboard(db_manager):
     with tab7:
         st.subheader("Segmentasi Persona Penumpang (K-Means Clustering)")
         try:
-            df_clustered, df_pers_sum = run_passenger_clustering(db_manager, n_clusters=3)
+            df_clustered, df_pers_sum = cached_clustering(db_manager, n_clusters=3)
             if not df_pers_sum.empty:
                 cols_p = st.columns(len(df_pers_sum))
                 border_colors = ["#007bff", "#28a745", "#dc3545"]
@@ -719,7 +748,7 @@ def render_dashboard(db_manager):
                     * **Elbow Method (Inertia SSE)**: Mengukur penurunan total variansi kuadrat dalam klaster (*Within-Cluster Sum of Squares*). Titik belok ('siku') menandai $k$ paling efisien.
                     * **Silhouette Coefficient**: Mengukur derajat pemisahan antar klaster (skala -1 s.d. +1, semakin mendekati +1 semakin terpisah dengan tegas).
                     """)
-                    df_elbow = compute_elbow_and_silhouette(db_manager, max_k=5)
+                    df_elbow = cached_elbow(db_manager, max_k=5)
                     if not df_elbow.empty:
                         ec1, ec2 = st.columns([1, 1])
                         with ec1:
@@ -792,7 +821,7 @@ def render_dashboard(db_manager):
             st.subheader("Frasa Keluhan Spesifik (Bi-Gram Context Mining) & Sentimen 3 Pilar Layanan (ABSA)")
             col_bg1, col_bg2 = st.columns([1, 1])
             with col_bg1:
-                df_bigram = extract_ngram_frequency(f_sar["masalah_dan_evaluasi"], n=2, top_n=12)
+                df_bigram = cached_bigram(f_sar["masalah_dan_evaluasi"], n=2, top_n=12)
                 fig_bg = px.bar(
                     df_bigram, x="Frekuensi", y="Frasa Keluhan", orientation='h',
                     color="Frekuensi", color_continuous_scale="Blues", text="Frekuensi",
@@ -804,7 +833,7 @@ def render_dashboard(db_manager):
                 st.plotly_chart(fig_bg, use_container_width=True)
 
             with col_bg2:
-                df_absa = analyze_aspect_based_sentiment(f_sar["masalah_dan_evaluasi"])
+                df_absa = cached_absa(f_sar["masalah_dan_evaluasi"])
                 fig_absa = go.Figure()
                 fig_absa.add_trace(go.Bar(name='Positif (%)', x=df_absa['pilar_aspek'], y=df_absa['persentase_positif'], marker_color='#28a745'))
                 fig_absa.add_trace(go.Bar(name='Netral (%)', x=df_absa['pilar_aspek'], y=df_absa['persentase_netral'], marker_color='#6c757d'))
@@ -818,7 +847,7 @@ def render_dashboard(db_manager):
 
             st.markdown("---")
             st.subheader("Topic Modeling Keluhan Operasional Penumpang (6 Klaster Isu)")
-            df_topics = extract_complaint_topics(f_sar["masalah_dan_evaluasi"])
+            df_topics = cached_topics(f_sar["masalah_dan_evaluasi"])
             ct1, ct2 = st.columns([3, 2])
             with ct1:
                 fig_top = px.bar(
@@ -839,7 +868,7 @@ def render_dashboard(db_manager):
 
             st.markdown("---")
             st.subheader("Model Deteksi Dini Risiko Ketidakpuasan (Supervised Machine Learning)")
-            pred_risk = predict_dissatisfaction_risks(db_manager)
+            pred_risk = cached_risk_model(db_manager)
             r_col1, r_col2 = st.columns([1, 2])
             with r_col1:
                 st.markdown(f"""<div class="kpi-card" style="border-left-color: #dc3545;">
@@ -915,7 +944,11 @@ def render_dashboard(db_manager):
         st.subheader("Unduh Laporan & Dataset Analitis")
         c_exp1, c_exp2 = st.columns(2)
         with c_exp1:
-            report_text = generate_terminal_report(db_manager, export_file=False)
+            if os.path.exists(REPORT_PATH):
+                with open(REPORT_PATH, "r", encoding="utf-8") as f_rep:
+                    report_text = f_rep.read()
+            else:
+                report_text = generate_terminal_report(db_manager, export_file=True)
             st.download_button(
                 label="Unduh Laporan Analisis Lengkap (TXT)",
                 data=report_text,

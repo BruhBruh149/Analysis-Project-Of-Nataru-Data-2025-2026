@@ -702,6 +702,21 @@ class NataruELTPipeline:
         self.db.save_dataframe(fakta_saran, "fakta_masukan_saran")
         self.db.save_dataframe(df, "data_asli")
 
+        # Buat indeks untuk mempercepat performa JOIN dan kueri analitik (O(log N))
+        logger.info("Mengoptimalkan indeks basis data untuk performa tinggi...")
+        indexes = [
+            ("fakta_kepuasan_keseluruhan", "id_responden", "idx_fakta_kep_resp"),
+            ("dim_perjalanan", "id_responden", "idx_dim_perj_resp"),
+            ("fakta_evaluasi_moda", "id_responden", "idx_fakta_eval_resp"),
+            ("dim_responden", "id_responden", "idx_dim_resp_id"),
+            ("fakta_masukan_saran", "id_responden", "idx_fakta_sar_resp")
+        ]
+        for tbl, col, idx_name in indexes:
+            try:
+                self.db.execute(f"CREATE INDEX `{idx_name}` ON `{tbl}`(`{col}`);")
+            except Exception:
+                pass
+
         # Buat SQL Views analitis terintegrasi
         views_script = """
         DROP VIEW IF EXISTS v_ringkasan_kepuasan_moda;

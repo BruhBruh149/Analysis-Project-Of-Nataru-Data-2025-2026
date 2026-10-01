@@ -39,10 +39,51 @@ from nataru.visualization import export_visualizations
 from nataru.dashboard import render_dashboard
 from tests.run_tests import run_self_tests
 
+def stop_running_dashboard():
+    """Menghentikan seluruh proses server dashboard Streamlit yang berjalan."""
+    print("========================================================================")
+    print("   MENGHENTIKAN SERVER DASHBOARD STREAMLIT NATARU                       ")
+    print("========================================================================")
+    stopped = 0
+    curr_pid = os.getpid()
+    if sys.platform == "win32":
+        try:
+            ps_cmd = (
+                "Get-CimInstance Win32_Process -Filter \"name = 'python.exe'\" | "
+                "Where-Object { $_.CommandLine -like '*streamlit*run*' -or $_.CommandLine -like '*Main.py*--dashboard*' } | "
+                "Select-Object -ExpandProperty ProcessId"
+            )
+            res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True)
+            for line in res.stdout.strip().splitlines():
+                line = line.strip()
+                if line.isdigit() and int(line) != curr_pid:
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", line], capture_output=True)
+                    stopped += 1
+        except Exception as e:
+            print(f"[ERROR] Gagal menghentikan dashboard: {e}")
+    else:
+        try:
+            res = subprocess.run(["pgrep", "-f", "streamlit run"], capture_output=True, text=True)
+            for line in res.stdout.strip().splitlines():
+                if line.strip().isdigit() and int(line.strip()) != curr_pid:
+                    os.kill(int(line.strip()), 9)
+                    stopped += 1
+        except Exception as e:
+            print(f"[ERROR] Gagal menghentikan dashboard: {e}")
+
+    if stopped > 0:
+        print(f"[STATUS] Sukses: Berhasil menghentikan {stopped} proses server dashboard.")
+    else:
+        print("[STATUS] Tidak ditemukan proses server dashboard aktif yang sedang berjalan.")
+    print("-> Terminal telah kembali bebas dan siap digunakan.\n")
+    sys.exit(0)
+
 def main():
     parser = argparse.ArgumentParser(description="Sistem Analitik Pipeline ELT & Dashboard Nataru")
     parser.add_argument("--pipeline", action="store_true", help="Jalankan Pipeline ELT Pemrosesan & Pembersihan Data secara otomatis tanpa UI")
     parser.add_argument("--dashboard", action="store_true", help="Buka Dashboard Analitik Interaktif Streamlit")
+    parser.add_argument("--background", "--bg", "--detach", action="store_true", dest="background", help="Jalankan dashboard di latar belakang (detached) agar terminal langsung bebas kembali")
+    parser.add_argument("--stop-dashboard", "--kill-dashboard", action="store_true", dest="stop_dashboard", help="Hentikan server dashboard Streamlit yang sedang berjalan")
     parser.add_argument("--status", action="store_true", help="Cek status database dan jumlah data")
     parser.add_argument("--sqlite", action="store_true", help="Paksa gunakan SQLite lokal (nataru_analytics.db) alih-alih MySQL XAMPP")
     parser.add_argument("--analytics", "--report", action="store_true", dest="analytics", help="Jalankan analisis langsung dari script/terminal dan cetak laporan eksekutif lengkap")
@@ -51,6 +92,10 @@ def main():
     parser.add_argument("--visualize", "--charts", "--plots", action="store_true", dest="visualize", help="Generate seluruh grafik visual (gambar PNG resolusi tinggi & HTML interaktif) langsung dari script")
     parser.add_argument("--test", action="store_true", help="Jalankan pengujian unit otomatis komprehensif internal (self-test)")
     args = parser.parse_args()
+
+    # Opsi Hentikan Dashboard yang Sedang Berjalan
+    if args.stop_dashboard:
+        stop_running_dashboard()
 
     db_manager = NataruDBManager(force_sqlite=args.sqlite)
 
@@ -67,9 +112,9 @@ def main():
             print(f"[STATUS] Data Fakta Kepuasan: {df_cnt['total'].iloc[0]:,} baris.")
         except Exception:
             print("[STATUS] Tabel fakta belum terbentuk. Jalankan --pipeline untuk memproses data.")
-        return
+        sys.exit(0)
 
-    #  2: Headless ELT Pipeline
+    # 2: Headless ELT Pipeline
     if args.pipeline:
         print("[PIPELINE] Menjalankan Pipeline ELT Otomatis...")
         pipeline = NataruELTPipeline(db_manager)
@@ -77,7 +122,7 @@ def main():
         print(f"[PIPELINE] Selesai dengan sukses! Total data: {report.get('total_records', 0):,} baris dalam {report.get('elapsed_time_seconds', 0)} detik.")
         print("[REPORT] Otomatis memperbarui file Laporan_Analisis_Nataru.txt...")
         generate_terminal_report(db_manager, export_file=True)
-        return
+        sys.exit(0)
 
     # 3: Ekspor Tabel Analitik ke File CSV
     if args.export_csv:
@@ -85,7 +130,7 @@ def main():
         export_all_tables_to_csv(db_manager)
         print("[REPORT] Otomatis memperbarui file Laporan_Analisis_Nataru.txt...")
         generate_terminal_report(db_manager, export_file=True)
-        return
+        sys.exit(0)
 
     # 4: Segmentasi Persona Penumpang K-Means
     if args.clustering:
@@ -98,7 +143,7 @@ def main():
         print("="*85 + "\n")
         print("[REPORT] Otomatis memperbarui file Laporan_Analisis_Nataru.txt...")
         generate_terminal_report(db_manager, export_file=True)
-        return
+        sys.exit(0)
 
     # 5: Analitik Langsung via Terminal (Eksekutif Report)
     if args.analytics:
@@ -109,9 +154,9 @@ def main():
             pipeline = NataruELTPipeline(db_manager)
             pipeline.run()
         generate_terminal_report(db_manager, export_file=True)
-        return
+        sys.exit(0)
 
-    #  6: Generate Visualisasi Grafik (PNG & HTML Interaktif)
+    # 6: Generate Visualisasi Grafik (PNG & HTML Interaktif)
     if args.visualize:
         try:
             db_manager.query("SELECT 1 FROM fakta_kepuasan_keseluruhan LIMIT 1;")
@@ -122,24 +167,69 @@ def main():
         export_visualizations(db_manager)
         print("[REPORT] Otomatis memperbarui file Laporan_Analisis_Nataru.txt...")
         generate_terminal_report(db_manager, export_file=True)
-        return
+        sys.exit(0)
 
     # Mode 7: Dashboard Launch vs Default Headless Process & Report
     is_streamlit_runner = os.environ.get("STREAMLIT_SERVER_PORT") is not None or "streamlit" in sys.argv[0]
 
     if is_streamlit_runner:
         render_dashboard(db_manager)
+        return
     elif args.dashboard:
-        print("========================================================================")
-        print("   MELUNCURKAN DASHBOARD ANALITIK NATARU           ")
-        print("========================================================================")
-        print(f"-> Database Terkoneksi: {db_manager.engine_type}")
-        print("-> Tekan Ctrl + C di terminal ini untuk berhenti.\n")
         cmd = [sys.executable, "-m", "streamlit", "run", os.path.abspath(__file__)]
         if args.sqlite:
             cmd.extend(["--", "--sqlite"])
-        subprocess.run(cmd)
-        return
+
+        if args.background:
+            print("========================================================================")
+            print("   MELUNCURKAN DASHBOARD ANALITIK NATARU (LATAR BELAKANG / DETACHED)    ")
+            print("========================================================================")
+            print(f"-> Database Terkoneksi: {db_manager.engine_type}")
+            print("-> Menjalankan server web Streamlit di latar belakang...")
+
+            if sys.platform == "win32":
+                DETACHED_PROCESS = 0x00000008
+                CREATE_NEW_PROCESS_GROUP = 0x00000200
+                CREATE_NO_WINDOW = 0x08000000
+                proc = subprocess.Popen(
+                    cmd,
+                    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    close_fds=True
+                )
+            else:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+
+            print(f"-> Server Dashboard aktif di background (PID: {proc.pid})")
+            print("-> Browser akan terbuka otomatis ke alamat: http://localhost:8501")
+            print("-> Terminal Anda telah bebas kembali dan siap menerima perintah baru.")
+            print("-> Untuk mematikan server dashboard nantinya, jalankan:")
+            print("   python Main.py --stop-dashboard")
+            print("========================================================================\n")
+            sys.exit(0)
+        else:
+            print("========================================================================")
+            print("   MELUNCURKAN DASHBOARD ANALITIK NATARU                                ")
+            print("========================================================================")
+            print(f"-> Database Terkoneksi: {db_manager.engine_type}")
+            print("-> Server aktif di: http://localhost:8501")
+            print("-> Terminal ini menjaga server tetap aktif untuk melayani browser.")
+            print("-> Tekan [Ctrl + C] kapan saja untuk berhenti dan kembali ke prompt terminal.")
+            print("-> TIPS: Ingin terminal langsung bebas? Jalankan: python Main.py --dashboard --bg")
+            print("========================================================================\n")
+            try:
+                subprocess.run(cmd)
+            except KeyboardInterrupt:
+                print("\n[INFO] Dashboard dihentikan. Terminal telah kembali bebas.")
+            sys.exit(0)
     else:
         print("========================================================================")
         print("   SISTEM ANALITIK TRANSPORTASI PUBLIK & PIPELINE ELT NATARU (Main.py)  ")
@@ -187,9 +277,10 @@ def main():
         print(f" [STATUS] File laporan: {'Diperbarui (Update)' if file_existed else 'Dibuat Baru (Generate)'}")
         print(f" [LOKASI] {REPORT_PATH}")
         print(" [INFO] Untuk membuka Dashboard Interaktif Streamlit di browser, jalankan:")
-        print("        python Main.py --dashboard")
+        print("        python Main.py --dashboard --bg   (terminal langsung bebas)")
+        print("        python Main.py --dashboard        (mode live terminal)")
         print("=" * 80 + "\n")
-        return
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
