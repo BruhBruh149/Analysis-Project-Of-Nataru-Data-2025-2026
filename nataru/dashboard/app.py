@@ -46,7 +46,6 @@ def render_dashboard(db_manager):
 
     st.set_page_config(
         page_title="Dashboard Analitik Pelayanan Transportasi Nataru",
-        page_icon="🚆",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -84,7 +83,7 @@ def render_dashboard(db_manager):
     # Header Utama
     st.markdown("""
     <div class="main-header">
-        <h1>🚆 SISTEM ANALITIK & EVALUASI PENYELENGGARAAN TRANSPORTASI NATARU</h1>
+        <h1>SISTEM ANALITIK & EVALUASI PENYELENGGARAAN TRANSPORTASI NATARU</h1>
         <p>Dashboard Eksekutif Pemantauan Kinerja Multimoda, Evaluasi 3 Pilar Mutu Layanan, Literasi Kebijakan, dan Deteksi Dini Risiko Pelayanan</p>
     </div>
     """, unsafe_allow_html=True)
@@ -348,7 +347,7 @@ def render_dashboard(db_manager):
                 with ch2:
                     st.markdown(f"**Rincian Evaluasi Simpul {hub_type}:**")
                     top_hub = df_hubs.iloc[0]
-                    st.success(f"🏆 **Simpul Tertinggi:** {top_hub['simpul']} — CSI: **{top_hub['avg_csi']:.1f}%** ({int(top_hub['n']):,} sampel)")
+                    st.success(f"**Simpul Tertinggi:** {top_hub['simpul']} — CSI: **{top_hub['avg_csi']:.1f}%** ({int(top_hub['n']):,} sampel)")
                     st.dataframe(df_hubs.rename(columns={
                         "simpul": "Nama Simpul", "n": "Jumlah Sampel",
                         "avg_skor": "Skor Kepuasan", "avg_csi": "CSI (%)"
@@ -362,7 +361,7 @@ def render_dashboard(db_manager):
             st.error(f"Gagal memuat evaluasi simpul: {e}")
 
         st.markdown("---")
-        st.subheader("🗺️ Peta Geospasial Kinerja Simpul Transportasi Nasional (OpenStreetMap GIS)")
+        st.subheader("Peta Geospasial Kinerja Simpul Transportasi Nasional (OpenStreetMap GIS)")
         st.markdown("Peta jalan nyata (*real street/terrain map*) sebaran simpul transportasi utama dengan status kepuasan (Hijau = Sangat Puas, Kuning = Cukup, Merah = Butuh Perbaikan):")
         
         try:
@@ -462,7 +461,7 @@ def render_dashboard(db_manager):
             st.dataframe(df_w[["waktu_menunggu_moda", "total_responden", "avg_skor_kepuasan", "avg_ketepatan_waktu"]], use_container_width=True)
 
         st.markdown("---")
-        st.subheader("🗺️ Pemetaan Geospasial Arus Mudik Asal-Tujuan (Origin-Destination Flow Map)")
+        st.subheader("Pemetaan Geospasial Arus Mudik Asal-Tujuan (Origin-Destination Flow Map)")
         st.markdown("Peta interaktif koridor pergerakan arus mudik terpadat antar-wilayah di Indonesia:")
         try:
             df_od = get_od_flow_data(db_manager, top_n=20)
@@ -484,7 +483,7 @@ def render_dashboard(db_manager):
             st.error(f"Gagal memuat peta OD: {ex_od}")
 
         st.markdown("---")
-        st.subheader("🔀 Diagram Alir Mobilitas Pemudik Antar-Wilayah (Origin-Destination Sankey Diagram)")
+        st.subheader("Diagram Alir Mobilitas Pemudik Antar-Wilayah (Origin-Destination Sankey Diagram)")
         st.markdown("Visualisasi interaktif aliran volume pemudik dari wilayah asal menuju wilayah tujuan mudik:")
         try:
             sk_c1, sk_c2 = st.columns([1, 3])
@@ -581,7 +580,7 @@ def render_dashboard(db_manager):
                 with sc2:
                     st.metric(label="Proyeksi Skor Baru", value=f"{proj_score:.2f} / 5.0", delta=f"+{delta_score:.2f}")
 
-                st.info(f"💡 Intervensi menghasilkan peningkatan kumulatif: **+{delta_csi:.2f}% CSI**.")
+                st.info(f"Intervensi menghasilkan peningkatan kumulatif: **+{delta_csi:.2f}% CSI**.")
 
             st.markdown("---")
             st.subheader("Deteksi Dini Risiko & Explainable AI (Random Forest & Feature Attribution)")
@@ -603,7 +602,7 @@ def render_dashboard(db_manager):
             with col_ew4:
                 st.metric("Populasi High-Risk Nasional", f"{ew_res.get('high_risk_pct', 19.41)}%", f"{ew_res.get('high_risk_count', 1977):,} Responden")
 
-            st.markdown("#### 🔍 Kalkulator Prediksi Risiko Skenario Individual & Explainable AI")
+            st.markdown("#### Kalkulator Prediksi Risiko Skenario Individual & Explainable AI")
             c_scen1, c_scen2 = st.columns([1, 1])
             with c_scen1:
                 sc_moda = st.selectbox("Pilih Moda Perjalanan:", ["Angkutan Umum (Bus)", "Kereta Api", "Angkutan Udara", "ASDP (Penyeberangan)", "Kendaraan Pribadi"])
@@ -633,7 +632,7 @@ def render_dashboard(db_manager):
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.markdown("**🔬 Explainable AI: Dekomposisi Kontribusi Faktor Risiko**")
+                st.markdown("**Explainable AI: Dekomposisi Kontribusi Faktor Risiko**")
                 contrib_list = scen_pred.get("feature_contributions", [])
                 if contrib_list:
                     df_ctrb = pd.DataFrame(contrib_list)
@@ -692,7 +691,7 @@ def render_dashboard(db_manager):
 
                 # Visualisasi Proyeksi 2D PCA Reduksi Dimensi
                 st.markdown("---")
-                st.subheader("🌐 Visualisasi Pemisahan Persona (Proyeksi 2D Reduksi Dimensi PCA)")
+                st.subheader("Visualisasi Pemisahan Persona (Proyeksi 2D Reduksi Dimensi PCA)")
                 st.markdown("Sebaran responden dalam ruang 2-dimensi berdasarkan seluruh atribut perjalanan dan evaluasi pilar:")
                 if "pca_x" in df_clustered.columns and "pca_y" in df_clustered.columns:
                     # Ambil sampel 3000 responden agar rendering interaktif sangat halus
@@ -714,7 +713,7 @@ def render_dashboard(db_manager):
                     st.plotly_chart(fig_pca, use_container_width=True)
 
                 # Evaluasi Ilmiah Elbow Method & Silhouette Score
-                with st.expander("🔬 Evaluasi Ilmiah Penentuan Jumlah Klaster Optimal (Elbow Method & Silhouette Score)", expanded=False):
+                with st.expander("Evaluasi Ilmiah Penentuan Jumlah Klaster Optimal (Elbow Method & Silhouette Score)", expanded=False):
                     st.markdown("""
                     Evaluasi kuantitatif untuk memvalidasi pemilihan jumlah klaster persona ($k=3$):
                     * **Elbow Method (Inertia SSE)**: Mengukur penurunan total variansi kuadrat dalam klaster (*Within-Cluster Sum of Squares*). Titik belok ('siku') menandai $k$ paling efisien.
@@ -790,7 +789,7 @@ def render_dashboard(db_manager):
 
             # Ekstraksi Frasa 2 Kata (Bi-gram) & Sentimen Berbasis Aspek 3 Pilar (ABSA)
             st.markdown("---")
-            st.subheader("💬 Frasa Keluhan Spesifik (Bi-Gram Context Mining) & Sentimen 3 Pilar Layanan (ABSA)")
+            st.subheader("Frasa Keluhan Spesifik (Bi-Gram Context Mining) & Sentimen 3 Pilar Layanan (ABSA)")
             col_bg1, col_bg2 = st.columns([1, 1])
             with col_bg1:
                 df_bigram = extract_ngram_frequency(f_sar["masalah_dan_evaluasi"], n=2, top_n=12)
@@ -818,7 +817,7 @@ def render_dashboard(db_manager):
                 st.plotly_chart(fig_absa, use_container_width=True)
 
             st.markdown("---")
-            st.subheader("🏷️ Topic Modeling Keluhan Operasional Penumpang (6 Klaster Isu)")
+            st.subheader("Topic Modeling Keluhan Operasional Penumpang (6 Klaster Isu)")
             df_topics = extract_complaint_topics(f_sar["masalah_dan_evaluasi"])
             ct1, ct2 = st.columns([3, 2])
             with ct1:
@@ -839,7 +838,7 @@ def render_dashboard(db_manager):
                 }), use_container_width=True, hide_index=True)
 
             st.markdown("---")
-            st.subheader("🚨 Model Deteksi Dini Risiko Ketidakpuasan (Supervised Machine Learning)")
+            st.subheader("Model Deteksi Dini Risiko Ketidakpuasan (Supervised Machine Learning)")
             pred_risk = predict_dissatisfaction_risks(db_manager)
             r_col1, r_col2 = st.columns([1, 2])
             with r_col1:
@@ -874,7 +873,7 @@ def render_dashboard(db_manager):
 
             # Kalkulator Prediksi Risiko Skenario Individual
             st.markdown("---")
-            st.subheader("🎛️ Kalkulator Prediksi Risiko Skenario Individual (Real-Time ML Simulator)")
+            st.subheader("Kalkulator Prediksi Risiko Skenario Individual (Real-Time ML Simulator)")
             st.markdown("Simulasikan profil perjalanan penumpang tertentu untuk menguji probabilitas ketidakpuasan secara *real-time*:")
             sim_r1, sim_r2, sim_r3 = st.columns(3)
             with sim_r1:
@@ -906,7 +905,7 @@ def render_dashboard(db_manager):
                     delta=pred_scen['risk_category']
                 )
             with res_c2:
-                st.info(f"📋 **Rekomendasi Operasional**: {pred_scen['rekomendasi']}")
+                st.info(f"**Rekomendasi Operasional**: {pred_scen['rekomendasi']}")
 
         except Exception as e:
             st.error(f"Gagal memproses NLP & Early Warning: {e}")
@@ -918,7 +917,7 @@ def render_dashboard(db_manager):
         with c_exp1:
             report_text = generate_terminal_report(db_manager, export_file=False)
             st.download_button(
-                label="📄 Unduh Laporan Analisis Lengkap (TXT)",
+                label="Unduh Laporan Analisis Lengkap (TXT)",
                 data=report_text,
                 file_name="Laporan_Analisis_Nataru.txt",
                 mime="text/plain"
@@ -926,7 +925,7 @@ def render_dashboard(db_manager):
         with c_exp2:
             csv_data = f_kep.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📊 Unduh Fakta Kepuasan (CSV)",
+                label="Unduh Fakta Kepuasan (CSV)",
                 data=csv_data,
                 file_name="fakta_kepuasan_keseluruhan.csv",
                 mime="text/csv"
