@@ -15,8 +15,11 @@ Seluruh logika inti telah dimodularisasi ke dalam paket `nataru`:
 
 import os
 import sys
+import time
+import socket
 import argparse
 import subprocess
+import webbrowser
 
 # Pastikan direktori root berada di sys.path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +41,105 @@ from nataru.analytics import (
 from nataru.visualization import export_visualizations
 from nataru.dashboard import render_dashboard
 from tests.run_tests import run_self_tests
+
+def is_port_listening(port=8501, host="127.0.0.1"):
+    """Mengecek apakah port web server sudah dalam status mendengarkan (listening)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
+def launch_dashboard(force_sqlite=False, foreground=False):
+    """Meluncurkan server dashboard Streamlit dan membuka browser."""
+    port = 8501
+    url = f"http://localhost:{port}"
+
+    if is_port_listening(port):
+        print("========================================================================")
+        print("   SERVER DASHBOARD SUDAH AKTIF                                         ")
+        print("========================================================================")
+        print(f"-> Dashboard telah berjalan di: {url}")
+        print("-> Membuka antarmuka dashboard di browser Anda...")
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        print("-> Terminal Anda tetap bebas dan siap digunakan.")
+        print("-> Untuk mematikan server dashboard nantinya, jalankan:")
+        print("   python Main.py --stop-dashboard")
+        print("========================================================================\n")
+        return
+
+    cmd = [sys.executable, "-m", "streamlit", "run", os.path.abspath(__file__), "--server.headless=true"]
+    if force_sqlite:
+        cmd.extend(["--", "--sqlite"])
+
+    if foreground:
+        print("========================================================================")
+        print("   MELUNCURKAN DASHBOARD ANALITIK NATARU (MODE LIVE TERMINAL)           ")
+        print("========================================================================")
+        print(f"-> Server aktif di: {url}")
+        print("-> Terminal ini menjaga server tetap aktif untuk melayani browser.")
+        print("-> Tekan [Ctrl + C] kapan saja untuk berhenti dan kembali ke prompt terminal.")
+        print("========================================================================\n")
+        try:
+            subprocess.run(cmd)
+        except KeyboardInterrupt:
+            print("\n[INFO] Dashboard dihentikan. Terminal telah kembali bebas.")
+        return
+
+    # Mode Latar Belakang (Detached Background) - Standar Default
+    print("========================================================================")
+    print("   MELUNCURKAN DASHBOARD ANALITIK NATARU                                ")
+    print("========================================================================")
+    print("-> Menginisialisasi server web Streamlit di latar belakang...")
+
+    log_path = os.path.join(BASE_DIR, "dashboard.log")
+    log_file = open(log_path, "a", encoding="utf-8")
+
+    if sys.platform == "win32":
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        proc = subprocess.Popen(
+            cmd,
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            stdout=log_file,
+            stderr=log_file,
+            stdin=subprocess.DEVNULL,
+            close_fds=True
+        )
+    else:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=log_file,
+            stderr=log_file,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True
+        )
+
+    # Tunggu sebentar hingga server siap merespon
+    print("-> Menunggu inisialisasi server...")
+    started = False
+    for _ in range(12):
+        time.sleep(0.5)
+        if is_port_listening(port):
+            started = True
+            break
+
+    print(f"-> Server Dashboard aktif di background (PID: {proc.pid})")
+    print(f"-> Alamat URL: {url}")
+    print("-> Membuka dashboard otomatis di browser...")
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+    print(f"-> Catatan log tersimpan di: {log_path}")
+    print("-> Terminal Anda telah langsung bebas kembali dan siap menerima perintah baru.")
+    print("-> Untuk mematikan server dashboard kapan saja, jalankan:")
+    print("   python Main.py --stop-dashboard")
+    print("========================================================================\n")
 
 def stop_running_dashboard():
     """Menghentikan seluruh proses server dashboard Streamlit yang berjalan."""
@@ -81,8 +183,9 @@ def stop_running_dashboard():
 def main():
     parser = argparse.ArgumentParser(description="Sistem Analitik Pipeline ELT & Dashboard Nataru")
     parser.add_argument("--pipeline", action="store_true", help="Jalankan Pipeline ELT Pemrosesan & Pembersihan Data secara otomatis tanpa UI")
-    parser.add_argument("--dashboard", action="store_true", help="Buka Dashboard Analitik Interaktif Streamlit")
-    parser.add_argument("--background", "--bg", "--detach", action="store_true", dest="background", help="Jalankan dashboard di latar belakang (detached) agar terminal langsung bebas kembali")
+    parser.add_argument("--dashboard", action="store_true", help="Buka Dashboard Analitik Interaktif Streamlit (otomatis latar belakang & buka browser)")
+    parser.add_argument("--live", "--foreground", action="store_true", dest="live", help="Jalankan dashboard di mode foreground (live terminal logs)")
+    parser.add_argument("--background", "--bg", "--detach", action="store_true", dest="background", help="Jalankan dashboard di latar belakang (default)")
     parser.add_argument("--stop-dashboard", "--kill-dashboard", action="store_true", dest="stop_dashboard", help="Hentikan server dashboard Streamlit yang sedang berjalan")
     parser.add_argument("--status", action="store_true", help="Cek status database dan jumlah data")
     parser.add_argument("--sqlite", action="store_true", help="Paksa gunakan SQLite lokal (nataru_analytics.db) alih-alih MySQL XAMPP")
@@ -169,67 +272,19 @@ def main():
         generate_terminal_report(db_manager, export_file=True)
         sys.exit(0)
 
-    # Mode 7: Dashboard Launch vs Default Headless Process & Report
-    is_streamlit_runner = os.environ.get("STREAMLIT_SERVER_PORT") is not None or "streamlit" in sys.argv[0]
+    # Mode 7: Deteksi Runtime Streamlit vs CLI Runner
+    try:
+        import streamlit as st
+        is_streamlit_runner = st.runtime.exists()
+    except Exception:
+        is_streamlit_runner = False
 
     if is_streamlit_runner:
         render_dashboard(db_manager)
         return
     elif args.dashboard:
-        cmd = [sys.executable, "-m", "streamlit", "run", os.path.abspath(__file__)]
-        if args.sqlite:
-            cmd.extend(["--", "--sqlite"])
-
-        if args.background:
-            print("========================================================================")
-            print("   MELUNCURKAN DASHBOARD ANALITIK NATARU (LATAR BELAKANG / DETACHED)    ")
-            print("========================================================================")
-            print(f"-> Database Terkoneksi: {db_manager.engine_type}")
-            print("-> Menjalankan server web Streamlit di latar belakang...")
-
-            if sys.platform == "win32":
-                DETACHED_PROCESS = 0x00000008
-                CREATE_NEW_PROCESS_GROUP = 0x00000200
-                CREATE_NO_WINDOW = 0x08000000
-                proc = subprocess.Popen(
-                    cmd,
-                    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    close_fds=True
-                )
-            else:
-                proc = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    start_new_session=True
-                )
-
-            print(f"-> Server Dashboard aktif di background (PID: {proc.pid})")
-            print("-> Browser akan terbuka otomatis ke alamat: http://localhost:8501")
-            print("-> Terminal Anda telah bebas kembali dan siap menerima perintah baru.")
-            print("-> Untuk mematikan server dashboard nantinya, jalankan:")
-            print("   python Main.py --stop-dashboard")
-            print("========================================================================\n")
-            sys.exit(0)
-        else:
-            print("========================================================================")
-            print("   MELUNCURKAN DASHBOARD ANALITIK NATARU                                ")
-            print("========================================================================")
-            print(f"-> Database Terkoneksi: {db_manager.engine_type}")
-            print("-> Server aktif di: http://localhost:8501")
-            print("-> Terminal ini menjaga server tetap aktif untuk melayani browser.")
-            print("-> Tekan [Ctrl + C] kapan saja untuk berhenti dan kembali ke prompt terminal.")
-            print("-> TIPS: Ingin terminal langsung bebas? Jalankan: python Main.py --dashboard --bg")
-            print("========================================================================\n")
-            try:
-                subprocess.run(cmd)
-            except KeyboardInterrupt:
-                print("\n[INFO] Dashboard dihentikan. Terminal telah kembali bebas.")
-            sys.exit(0)
+        launch_dashboard(force_sqlite=args.sqlite, foreground=args.live)
+        sys.exit(0)
     else:
         print("========================================================================")
         print("   SISTEM ANALITIK TRANSPORTASI PUBLIK & PIPELINE ELT NATARU (Main.py)  ")
@@ -277,8 +332,8 @@ def main():
         print(f" [STATUS] File laporan: {'Diperbarui (Update)' if file_existed else 'Dibuat Baru (Generate)'}")
         print(f" [LOKASI] {REPORT_PATH}")
         print(" [INFO] Untuk membuka Dashboard Interaktif Streamlit di browser, jalankan:")
-        print("        python Main.py --dashboard --bg   (terminal langsung bebas)")
-        print("        python Main.py --dashboard        (mode live terminal)")
+        print("        python Main.py --dashboard        (otomatis latar belakang & terminal bebas)")
+        print("        python Main.py --dashboard --live (mode live terminal)")
         print("=" * 80 + "\n")
         sys.exit(0)
 

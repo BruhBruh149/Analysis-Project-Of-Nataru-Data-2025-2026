@@ -1002,3 +1002,12 @@ def render_dashboard(db_manager):
                         f2 = png_files[i + 1]
                         p2 = os.path.join(CHARTS_DIR, f2)
                         st.image(p2, caption=f"Grafik: {f2.replace('_', ' ').replace('.png', '').upper()}", use_container_width=True)
+
+if __name__ == "__main__":
+    _curr_dir = os.path.dirname(os.path.abspath(__file__))
+    _root_dir = os.path.abspath(os.path.join(_curr_dir, "..", ".."))
+    if _root_dir not in sys.path:
+        sys.path.insert(0, _root_dir)
+    from nataru.database import NataruDBManager
+    _db_mgr = NataruDBManager()
+    render_dashboard(_db_mgr)
